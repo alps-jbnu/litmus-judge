@@ -1,0 +1,4 @@
+color-g++: /usr/bin/g++
+color-gcc: /usr/bin/gcc
+color-c++: /usr/bin/c++
+color-cc:  /usr/bin/cc
