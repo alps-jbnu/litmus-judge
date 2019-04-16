@@ -1,20 +1,18 @@
 #!/bin/bash
+#usage: nohup ./service.sh &
 
-USER='<user>'
-VPATH='<project>'
+USER='<username>'
 
 HOME=/home/$USER/judge
-VENV=/home/$USER/env/$VPATH
+VENV=/home/$USER/env
 source $VENV/bin/activate
 
-LOGFILE=$HOME/service.log
-touch $LOGFILE
-chown $USER:$USER $LOGFILE
-
-CUR_DATE=`date`
-echo "==================================" >> $LOGFILE
-echo "Start on [ $CUR_DATE ]" >> $LOGFILE
-
-# https://askubuntu.com/questions/420981/how-do-i-save-terminal-output-to-a-file
-dmoj -c $HOME/config.yml 0.0.0.0 >> $LOGFILE
+for f in *.yml
+do
+    NAME=${f%%.*}
+    EXT=${f##*.}
+    LOG="$NAME.log"
+    echo "Run judge($HOME/$f)"
+    dmoj -c $HOME/$f 0.0.0.0 >> $LOG &
+done
 
