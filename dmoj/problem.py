@@ -70,13 +70,14 @@ class Problem(object):
 
     def _resolve_testcases(self, cfg, batch_no=0):
         cases = []
-        for case_config in cfg:
-            if 'batched' in case_config.raw_config:
-                self._batch_counter += 1
-                cases.append(BatchedTestCase(self._batch_counter, case_config, self))
-            else:
-                cases.append(TestCase(self._testcase_counter, batch_no, case_config, self))
-                self._testcase_counter += 1
+        if cfg is not None:
+            for case_config in cfg:
+                if 'batched' in case_config.raw_config:
+                    self._batch_counter += 1
+                    cases.append(BatchedTestCase(self._batch_counter, case_config, self))
+                else:
+                    cases.append(TestCase(self._testcase_counter, batch_no, case_config, self))
+                    self._testcase_counter += 1
         return cases
 
 
