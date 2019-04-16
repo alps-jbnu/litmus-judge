@@ -1,8 +1,9 @@
 from __future__ import print_function
 
-import os
-import sys
 from collections import OrderedDict
+import os
+import shlex
+import sys
 
 from six.moves import input
 
@@ -81,6 +82,10 @@ def register(command):
 
 
 def main():
+    sys.exit(cli_main())
+
+
+def cli_main():
     global commands
     import logging
     from dmoj import judgeenv, executors
@@ -113,25 +118,31 @@ def main():
     for command in all_commands:
         register(command(judge))
 
+    def run_command(line):
+        if line[0] in commands:
+            cmd = commands[line[0]]
+            try:
+                return cmd.execute(line[1:])
+            except InvalidCommandException as e:
+                if e.message:
+                    print(ansi_style("#ansi[%s](red|bold)\n" % e.message))
+                print()
+                return 1
+        else:
+            print(ansi_style('#ansi[Unrecognized command %s](red|bold)' % line[0]))
+            print()
+            return 127
+
     with judge:
         try:
             judge.listen()
 
-            while True:
-                command = input(ansi_style("#ansi[dmoj](magenta)#ansi[>](green) ")).strip()
-
-                line = command.split(' ')
-                if line[0] in commands:
-                    cmd = commands[line[0]]
-                    try:
-                        cmd.execute(line[1:])
-                    except InvalidCommandException as e:
-                        if e.message:
-                            print(ansi_style("#ansi[%s](red|bold)\n" % e.message))
-                        print()
-                else:
-                    print(ansi_style('#ansi[Unrecognized command %s](red|bold)' % line[0]))
-                    print()
+            if judgeenv.cli_command:
+                return run_command(judgeenv.cli_command)
+            else:
+                while True:
+                    command = input(ansi_style("#ansi[dmoj](magenta)#ansi[>](green) ")).strip()
+                    run_command(shlex.split(command))
         except (EOFError, KeyboardInterrupt):
             print()
         finally:
@@ -139,4 +150,4 @@ def main():
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    main()

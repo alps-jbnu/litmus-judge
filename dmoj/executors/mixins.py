@@ -4,6 +4,7 @@ import shutil
 import sys
 from shutil import copyfile
 
+from dmoj.error import InternalError
 from dmoj.judgeenv import env
 from dmoj.utils import setbufsize_path
 from dmoj.utils.unicode import utf8bytes
@@ -76,6 +77,7 @@ try:
 
         class PlatformExecutorMixin(object):
             address_grace = 65536
+            data_grace = 0
             personality = 0x0040000  # ADDR_NO_RANDOMIZE
             fs = []
             syscalls = []
@@ -92,13 +94,12 @@ try:
             def get_security(self, launch_kwargs=None):
                 if CHROOTSecurity is None:
                     raise NotImplementedError('No security manager on Windows')
-                sec = CHROOTSecurity(self.get_fs(), io_redirects=launch_kwargs.get('io_redirects', None))
+                sec = CHROOTSecurity(self.get_fs())
                 return self._add_syscalls(sec)
 
             def get_fs(self):
                 name = self.get_executor_name()
-                fs = BASE_FILESYSTEM + self.fs + env.get('extra_fs', {}).get(name, [])
-                fs += [re.escape(self._file('setbufsize.so')) + '$', re.escape(self._dir) + '$']
+                fs = BASE_FILESYSTEM + self.fs + env.get('extra_fs', {}).get(name, []) + [re.escape(self._dir)]
                 return fs
 
             def get_allowed_syscalls(self):
@@ -108,15 +109,30 @@ try:
                 return self.address_grace
 
             def get_env(self):
-                env = {'LANG': 'C'}
+                env = {'LANG': 'C.UTF-8'}
                 if self.unbuffered:
                     env['CPTBOX_STDOUT_BUFFER_SIZE'] = 0
                 return env
 
             def launch(self, *args, **kwargs):
+                for src, dst in kwargs.get('symlinks', {}).items():
+                    src = os.path.abspath(os.path.join(self._dir, src))
+                    # Disallow the creation of symlinks outside the submission directory.
+                    if os.path.commonprefix([src, self._dir]) == self._dir:
+                        # If a link already exists under this name, it's probably from a
+                        # previous case, but might point to something different.
+                        if os.path.islink(src):
+                            os.unlink(src)
+                        os.symlink(dst, src)
+                    else:
+                        raise InternalError('cannot symlink outside of submission directory')
+
                 agent = self._file('setbufsize.so')
                 shutil.copyfile(setbufsize_path, agent)
                 env = {
+                    # Forward LD_LIBRARY_PATH for systems (e.g. Android Termux) that require
+                    # it to find shared libraries
+                    'LD_LIBRARY_PATH': os.environ.get('LD_LIBRARY_PATH', ''),
                     'LD_PRELOAD': agent,
                     'CPTBOX_STDOUT_BUFFER_SIZE': kwargs.get('stdout_buffer_size'),
                     'CPTBOX_STDERR_BUFFER_SIZE': kwargs.get('stderr_buffer_size'),
@@ -127,6 +143,7 @@ try:
                                    executable=utf8bytes(self.get_executable()),
                                    security=self.get_security(launch_kwargs=kwargs),
                                    address_grace=self.get_address_grace(),
+                                   data_grace=self.data_grace,
                                    personality=self.personality, fds=kwargs.get('fds'),
                                    time=kwargs.get('time'), memory=kwargs.get('memory'),
                                    wall_time=kwargs.get('wall_time'),

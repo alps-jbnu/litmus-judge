@@ -8,6 +8,9 @@ import signal
 import sys
 import threading
 import traceback
+
+import six
+
 from functools import partial
 from itertools import chain
 
@@ -20,7 +23,7 @@ from dmoj.monitor import Monitor, DummyMonitor
 from dmoj.problem import Problem, BatchedTestCase
 from dmoj.result import Result
 from dmoj.utils.ansi import ansi_style, strip_ansi
-from dmoj.utils.unicode import utf8bytes, unicode_stdout_stderr
+from dmoj.utils.unicode import utf8bytes, utf8text, unicode_stdout_stderr
 
 try:
     from http.server import HTTPServer
@@ -127,7 +130,6 @@ class Judge(object):
 
         class InvocationCase(object):
             config = ConfigNode({'unbuffered': False})
-            io_redirects = lambda: None
             input_data = lambda: input_data
 
         grader = self.get_grader_from_source(InvocationGrader, InvocationProblem(), language, source)
@@ -200,7 +202,7 @@ class Judge(object):
                         colored_codes = list(map(lambda x: '#ansi[%s](%s|bold)' % ('--' if x == 'SC' else x,
                                                                                    Result.COLORS_BYID[x]), codes))
                         colored_aux_codes = '{%s}' % ', '.join(colored_codes[1:]) if len(codes) > 1 else ''
-                        colored_feedback = '(#ansi[%s](|underline)) ' % result.feedback if result.feedback else ''
+                        colored_feedback = '(#ansi[%s](|underline)) ' % utf8text(result.feedback) if result.feedback else u''
                         case_info = '[%.3fs (%.3fs) | %dkb] %s%s' % (result.execution_time,
                                                                      result.r_execution_time,
                                                                      result.max_memory,
@@ -239,7 +241,11 @@ class Judge(object):
                 for batched_case in self.grade_cases(grader, case.batched_cases,
                                                      short_circuit=case.config['short_circuit'],
                                                      is_short_circuiting=is_short_circuiting):
-                    if (batched_case.result_flag & Result.WA) > 0 and not case.points:
+                    # A batched case just failed.
+                    # There are two cases where this means that we should completely short-circuit:
+                    # 1. If the batch was worth 0 points, to emulate the property of 0-point cases.
+                    # 2. If the short_circuit flag is true, see <https://github.com/DMOJ/judge/issues/341>.
+                    if (batched_case.result_flag & Result.WA) and (not case.points or short_circuit):
                         is_short_circuiting = True
                     yield batched_case
                 yield BatchEnd()
@@ -351,6 +357,13 @@ class ClassicJudge(Judge):
 def sanity_check():
     # Don't allow starting up without wbox/cptbox, saves cryptic errors later on
     if os.name == 'nt':
+        from judgeenv import env
+
+        # Nasty crashes will happen if tempdir isn't specified.
+        if not env.tempdir:
+            print('must specify `tempdir` in judge config to a directory readable by all users')
+            return False
+
         try:
             from .wbox import _wbox
         except ImportError:
@@ -373,6 +386,16 @@ def sanity_check():
         if os.getuid() == 0:
             startup_warnings.append('running the judge as root can be potentially unsafe, '
                                     'consider using an unprivileged user instead')
+
+        # Our sandbox filter is long but simple, so we can see large improvements
+        # in overhead by enabling the BPF JIT for seccomp.
+        bpf_jit_path = '/proc/sys/net/core/bpf_jit_enable'
+        if os.path.exists(bpf_jit_path):
+            with open(bpf_jit_path, 'r') as f:
+                if f.read().strip() != '1':
+                    startup_warnings.append('running without BPF JIT enabled, consider running '
+                                            '`echo 1 > /proc/sys/net/core/bpf_jit_enable` '
+                                            'to reduce sandbox overhead')
 
     # _checker implements standard checker functions in C
     # we fall back to a Python implementation if it's not compiled, but it's slower
@@ -403,7 +426,11 @@ def judge_proc(need_monitor):
     logging.basicConfig(filename=logfile, level=logging.INFO,
                         format='%(levelname)s %(asctime)s %(process)d %(module)s %(message)s')
 
-    setproctitle('DMOJ Judge: %s on %s' % (env['id'], make_host_port(judgeenv)))
+    proctitle = 'DMOJ Judge: %s on %s' % (env['id'], make_host_port(judgeenv))
+    if six.PY2:
+        setproctitle(utf8bytes(proctitle))
+    else:
+        setproctitle(proctitle)
 
     judge = ClassicJudge(judgeenv.server_host, judgeenv.server_port,
                          secure=judgeenv.secure, no_cert_check=judgeenv.no_cert_check,

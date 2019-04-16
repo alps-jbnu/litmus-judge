@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+import hashlib
 import re
 import shutil
 import signal
@@ -11,6 +12,9 @@ import traceback
 from distutils.spawn import find_executable
 from subprocess import Popen
 
+import pylru
+import six
+
 from dmoj.error import CompileError
 from dmoj.executors.mixins import PlatformExecutorMixin
 from dmoj.judgeenv import env
@@ -18,6 +22,7 @@ from dmoj.utils.ansi import ansi_style
 from dmoj.utils.communicate import *
 from dmoj.utils.error import print_protection_fault
 from dmoj.utils.unicode import utf8bytes, utf8text
+from dmoj.utils.uniprocess import Popen as UniPopen
 
 reversion = re.compile('.*?(\d+(?:\.\d+)+)', re.DOTALL)
 version_cache = {}
@@ -28,19 +33,21 @@ class BaseExecutor(PlatformExecutorMixin):
     nproc = 0
     command = None
     command_paths = []
-    runtime_dict = env['runtime']
+    runtime_dict = env.runtime
     name = '(unknown)'
     test_program = ''
     test_name = 'self_test'
-    test_time = 10
-    test_memory = 65536
+    test_time = env.selftest_time_limit
+    test_memory = env.selftest_memory_limit
 
-    def __init__(self, problem_id, source_code, **kwargs):
-        self._dir = tempfile.mkdtemp(dir=env.tempdir)
+    def __init__(self, problem_id, source_code, dest_dir=None, hints=None,
+                 unbuffered=False, **kwargs):
+        self._tempdir = dest_dir or env.tempdir
+        self._dir = None
         self.problem = problem_id
         self.source = source_code
-        self._hints = kwargs.pop('hints', [])
-        self.unbuffered = kwargs.pop('unbuffered', None) or False
+        self._hints = hints or []
+        self.unbuffered = unbuffered
 
     def cleanup(self):
         if not hasattr(self, '_dir'):
@@ -57,6 +64,10 @@ class BaseExecutor(PlatformExecutorMixin):
         self.cleanup()
 
     def _file(self, *paths):
+        # Defer creation of temporary submission directory until first file is created,
+        # because we may not need one (e.g. for cached executors).
+        if self._dir is None:
+            self._dir = tempfile.mkdtemp(dir=self._tempdir)
         return os.path.join(self._dir, *paths)
 
     @classmethod
@@ -102,11 +113,19 @@ class BaseExecutor(PlatformExecutorMixin):
             test_message = b'echo: Hello, World!'
             stdout, stderr = proc.communicate(test_message + b'\n')
 
+            if proc.tle:
+                print(ansi_style('#ansi[Time Limit Exceeded](red|bold)'))
+                return False
+            if proc.mle:
+                print(ansi_style('#ansi[Memory Limit Exceeded](red|bold)'))
+                return False
+
             res = stdout.strip() == test_message and not stderr
             if output:
                 # Cache the versions now, so that the handshake packet doesn't take ages to generate
                 cls.get_runtime_versions()
-                print(ansi_style(['#ansi[Failed](red|bold)', '#ansi[Success](green|bold)'][res]))
+                usage = '[%.3fs, %d KB]' % (proc.execution_time, proc.max_memory)
+                print(ansi_style(['#ansi[Failed](red|bold)', '#ansi[Success](green|bold)'][res]), usage)
             if stdout.strip() != test_message and error_callback:
                 error_callback('Got unexpected stdout output:\n' + utf8text(stdout))
             if stderr:
@@ -243,7 +262,7 @@ class ScriptExecutor(BaseExecutor):
 
     def create_files(self, problem_id, source_code):
         with open(self._code, 'wb') as fo:
-            fo.write(source_code)
+            fo.write(utf8bytes(source_code))
 
     def get_cmdline(self):
         return [self.get_command(), self._code]
@@ -260,11 +279,60 @@ class ScriptExecutor(BaseExecutor):
         return env
 
 
-class CompiledExecutor(BaseExecutor):
-    executable_size = 131072 * 1024  # 128mb
-    compiler_time_limit = 10
+# A lot of executors must do initialization during their constructors, which is
+# complicated by the CompiledExecutor compiling *during* its constructor. From a
+# user's perspective, though, once an Executor is instantiated, it should be ready
+# to launch (e.g. the user shouldn't have to care about compiling themselves). As
+# a compromise, we use a metaclass to compile after all constructors have ran.
+#
+# Using a metaclass also allows us to handle caching executors transparently.
+# Contract: if cached=True is specified and an entry exists in the cache,
+# `create_files` and `compile` will not be run, and `_executable` will be loaded
+# from the cache.
+class CompiledExecutorMeta(type):
+    def _cleanup_cache_entry(key, executor):
+        # Mark the executor as not-cached, so that if this is the very last reference
+        # to it, __del__ will clean it up.
+        executor.is_cached = False
 
-    class TimedPopen(subprocess.Popen):
+    compiled_binary_cache = pylru.lrucache(env.compiled_binary_cache_size, _cleanup_cache_entry)
+
+    def __call__(self, *args, **kwargs):
+        is_cached = kwargs.get('cached')
+        if is_cached:
+            kwargs['dest_dir'] = env.compiled_binary_cache_dir
+
+        # Finish running all constructors before compiling.
+        obj = super(CompiledExecutorMeta, self).__call__(*args, **kwargs)
+        obj.is_cached = is_cached
+
+        # Before writing sources to disk, check if we have this executor in our cache.
+        if is_cached:
+            cache_key = obj.__class__.__name__ + obj.__module__ + obj.get_binary_cache_key()
+            cache_key = hashlib.sha384(utf8bytes(cache_key)).hexdigest()
+            if cache_key in self.compiled_binary_cache:
+                executor = self.compiled_binary_cache[cache_key]
+                # Minimal sanity checking: is the file still there? If not, we'll just recompile.
+                if os.path.isfile(executor._executable):
+                    obj._executable = executor._executable
+                    obj._dir = executor._dir
+                    return obj
+
+        obj.create_files(*args, **kwargs)
+        obj.compile()
+
+        if is_cached:
+            self.compiled_binary_cache[cache_key] = obj
+
+        return obj
+
+
+class CompiledExecutor(six.with_metaclass(CompiledExecutorMeta, BaseExecutor)):
+    executable_size = env.compiler_size_limit * 1024
+    compiler_time_limit = env.compiler_time_limit
+    compile_output_index = 1
+
+    class TimedPopen(UniPopen):
         def __init__(self, *args, **kwargs):
             self._time = kwargs.pop('time_limit', None)
             super(CompiledExecutor.TimedPopen, self).__init__(*args, **kwargs)
@@ -309,14 +377,17 @@ class CompiledExecutor(BaseExecutor):
 
     def __init__(self, problem_id, source_code, *args, **kwargs):
         super(CompiledExecutor, self).__init__(problem_id, source_code, **kwargs)
-        self.create_files(problem_id, source_code, *args, **kwargs)
         self.warning = None
-        self._executable = self.compile()
+        self._executable = None
+
+    def cleanup(self):
+        if not self.is_cached:
+            super(CompiledExecutor, self).cleanup()
 
     def create_files(self, problem_id, source_code, *args, **kwargs):
         self._code = self._file(problem_id + self.ext)
         with open(self._code, 'wb') as fo:
-            fo.write(source_code)
+            fo.write(utf8bytes(source_code))
 
     def get_compile_args(self):
         raise NotImplementedError()
@@ -350,7 +421,8 @@ class CompiledExecutor(BaseExecutor):
         # Use safe_communicate because otherwise, malicious submissions can cause a compiler
         # to output hundreds of megabytes of data as output before being killed by the time limit,
         # which effectively murders the MySQL database waiting on the site server.
-        return safe_communicate(process, None, outlimit=65536, errlimit=65536)[1]
+        limit = env.compiler_output_character_limit
+        return safe_communicate(process, None, outlimit=limit, errlimit=limit)[self.compile_output_index]
 
     def get_compiled_file(self):
         return self._file(self.problem)
@@ -360,6 +432,9 @@ class CompiledExecutor(BaseExecutor):
 
     def handle_compile_error(self, output):
         raise CompileError(output)
+
+    def get_binary_cache_key(self):
+        return self.problem + self.source
 
     def compile(self):
         process = self.get_compile_process()
@@ -371,7 +446,9 @@ class CompiledExecutor(BaseExecutor):
         if self.is_failed_compile(process):
             self.handle_compile_error(output)
         self.warning = output
-        return self.get_compiled_file()
+
+        self._executable = self.get_compiled_file()
+        return self._executable
 
     def get_cmdline(self):
         return [self.problem]

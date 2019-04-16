@@ -1,6 +1,7 @@
 # encoding: utf-8
 from __future__ import print_function
 
+import io
 import os
 import sys
 
@@ -17,6 +18,15 @@ from setuptools import setup, Extension, find_packages
 from setuptools.command.build_ext import build_ext
 
 has_pyx = os.path.exists(os.path.join(os.path.dirname(__file__), 'dmoj', 'cptbox', '_cptbox.pyx'))
+
+try:
+    with open('/proc/version') as f:
+        is_wsl = 'microsoft' in f.read().lower()
+except IOError:
+    is_wsl = False
+
+# Allow manually disabling seccomp on old kernels. WSL doesn't have seccomp.
+has_seccomp = not is_wsl and os.environ.get('DMOJ_USE_SECCOMP') != 'no'
 
 try:
     from Cython.Build import cythonize
@@ -69,8 +79,10 @@ class build_ext_dmoj(build_ext, object):
             arch = os.uname()[4]
             is_arm = arch.startswith('arm') or arch.startswith('aarch')
             target_arch = os.environ.get('DMOJ_TARGET_ARCH')
+
+            extra_compile_args = []
             if is_arm or os.environ.get('DMOJ_REDIST'):
-                extra_compile_args = ['-O3']
+                extra_compile_args.append('-O3')
                 if target_arch:
                     extra_compile_args.append('-march=%s' % target_arch)
                 elif is_arm:
@@ -79,7 +91,7 @@ class build_ext_dmoj(build_ext, object):
                     print('Compiling slower generic build.')
                     print('*' * 79)
             else:
-                extra_compile_args = ['-march=%s' % (target_arch or 'native'), '-O3']
+                extra_compile_args += ['-march=%s' % (target_arch or 'native'), '-O3']
             self.distribution.ext_modules[0].extra_compile_args = extra_compile_args
 
         super(build_ext_dmoj, self).build_extensions()
@@ -112,39 +124,34 @@ if os.name == 'nt' or 'sdist' in sys.argv:
 
 if os.name != 'nt' or 'sdist' in sys.argv:
     libs = ['rt']
+
+    if has_seccomp:
+        libs += ['seccomp']
     if sys.platform.startswith('freebsd'):
         libs += ['procstat']
 
     macros = []
-    try:
-        with open('/proc/version') as f:
-            if 'microsoft' in f.read().lower():
-                macros.append(('WSL', None))
-    except IOError:
-        pass
+    if is_wsl:
+        macros.append(('WSL', None))
+
+    if not has_seccomp:
+        print('*' * 79)
+        print('Building without seccomp, expect lower sandbox performance.')
+        print('*' * 79)
+        macros.append(('PTBOX_NO_SECCOMP', None))
+
     extensions += [Extension('dmoj.cptbox._cptbox', sources=cptbox_sources,
                              language='c++', libraries=libs, define_macros=macros)]
 
 if os.name != 'nt':
     extensions += [SimpleSharedObject('dmoj.utils.setbufsize', sources=['dmoj/utils/setbufsize.c'])]
 
-rst_path = os.path.join(os.path.dirname(__file__), 'README.rst')
-
-if 'sdist' in sys.argv:
-    readme = subprocess.check_output("pandoc -f markdown_github README.md -t html | sed -e 's/❌/X/g' | "
-                                     'pandoc -f html -t rst --columns=300', shell=True)
-    with open(rst_path, 'wb') as f:
-        f.write(readme)
-else:
-    try:
-        with open(rst_path, 'rb') as f:
-            readme = f.read().replace(b'\r\n', b'\r').replace(b'\r', b'\n')
-    except IOError:
-        readme = None
+with io.open(os.path.join(os.path.dirname(__file__), 'README.md'), encoding='utf-8') as f:
+    readme = f.read()
 
 setup(
     name='dmoj',
-    version='1.2.0',
+    version='1.3.0',
     packages=find_packages(),
     package_data={
         'dmoj.cptbox': ['syscalls/aliases.list', 'syscalls/*.tbl'],
@@ -159,7 +166,7 @@ setup(
         ],
     },
     ext_modules=cythonize(extensions),
-    install_requires=['watchdog', 'pyyaml', 'ansi2html', 'termcolor', 'pygments', 'six', 'setproctitle'],
+    install_requires=['watchdog', 'pyyaml', 'ansi2html', 'termcolor', 'pygments', 'six', 'setproctitle', 'pylru'],
     tests_require=['mock', 'requests'],
     extras_require={
         'test': ['mock'],
@@ -170,7 +177,8 @@ setup(
     author_email='admin@dmoj.ca',
     url='https://github.com/DMOJ/judge',
     description='The judge component of the DMOJ: Modern Online Judge platform',
-    long_description=readme and readme.decode('utf-8', 'replace'),
+    long_description=readme,
+    long_description_content_type='text/markdown',
     keywords='online-judge',
     classifiers=[
         'Development Status :: 5 - Production/Stable',

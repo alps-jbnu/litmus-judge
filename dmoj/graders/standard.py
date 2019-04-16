@@ -32,8 +32,10 @@ class StandardGrader(BaseGrader):
 
         input = case.input_data()  # cache generator data
 
-        self._current_proc = self.binary.launch(time=self.problem.time_limit, memory=self.problem.memory_limit,
-                                                pipe_stderr=True, io_redirects=case.io_redirects(),
+        self._current_proc = self.binary.launch(time=self.problem.time_limit,
+                                                memory=self.problem.memory_limit,
+                                                symlinks=case.config.symlinks,
+                                                pipe_stderr=True,
                                                 wall_time=case.config.wall_time_factor * self.problem.time_limit)
 
         error = self._interact_with_process(case, result, input)
@@ -56,6 +58,7 @@ class StandardGrader(BaseGrader):
 
         result.result_flag |= [Result.WA, Result.AC][check.passed]
         result.points = check.points
+        result.extended_feedback = check.extended_feedback
 
         self.update_feedback(check, error, process, result)
         case.free_data()
@@ -99,17 +102,25 @@ class StandardGrader(BaseGrader):
         # We shouldn't run checkers if the submission is already known to be incorrect, because some checkers
         # might be very computationally expensive.
         # See https://github.com/DMOJ/judge/issues/170
-        if not result.result_flag:
-            # Checkers might crash if any data is None, so force at least empty string
-            check = case.checker()(result.proc_output or b'',
-                                   case.output_data() or b'',
-                                   submission_source=self.source,
-                                   judge_input=case.input_data() or b'',
-                                   point_value=case.points,
-                                   case_position=case.position,
-                                   batch=case.batch,
-                                   submission_language=self.language,
-                                   binary_data=case.has_binary_data)
+        checker = case.checker()
+        # checker is a `partial` object, NOT a `function` object
+        if not result.result_flag or getattr(checker.func, 'run_on_error', False):
+            try:
+                # Checkers might crash if any data is None, so force at least empty string
+                check = checker(result.proc_output or b'',
+                                case.output_data() or b'',
+                                submission_source=self.source,
+                                judge_input=case.input_data() or b'',
+                                point_value=case.points,
+                                case_position=case.position,
+                                batch=case.batch,
+                                submission_language=self.language,
+                                binary_data=case.has_binary_data,
+                                execution_time=result.execution_time)
+            except UnicodeDecodeError:
+                # Don't rely on problemsetters to do sane things when it comes to Unicode handling, so
+                # just proactively swallow all Unicode-related checker errors.
+                return CheckerResult(False, 0, feedback='invalid unicode')
         else:
             # Solution is guaranteed to receive 0 points
             check = False
@@ -170,7 +181,7 @@ class StandardGrader(BaseGrader):
         except CompileError as compilation_error:
             error = compilation_error.args[0]
             error = error.decode('mbcs') if os.name == 'nt' and isinstance(error, six.binary_type) else error
-            self.judge.packet_manager.compile_error_packet(ansi.format_ansi(error or ''))
+            self.judge.packet_manager.compile_error_packet(ansi.format_ansi(error or 'compiler exited abnormally'))
 
             # Compile error is fatal
             raise

@@ -6,6 +6,7 @@ import yaml
 
 from dmoj.config import ConfigNode
 from dmoj.utils.unicode import utf8text
+from dmoj.utils import pyyaml_patch
 
 try:
     import ssl
@@ -16,7 +17,32 @@ problem_dirs = ()
 problem_watches = ()
 env = ConfigNode(defaults={
     'selftest_sandboxing': True,
+    'selftest_time_limit': 10,  # 10 seconds
+    'selftest_memory_limit': 131072,  # 128mb of RAM
+    'generator_sandboxing': True,
+    'generator_time_limit': 20,  # 20 seconds
+    'generator_memory_limit': 524288,  # 512mb of RAM
+    'compiler_time_limit': 10,  # Kill compiler after 10 seconds
+    'compiler_size_limit': 131072,  # Maximum allowable compiled file size, 128mb
+    'compiler_output_character_limit': 65536,  # Number of characters allowed in compile output
+    'compiled_binary_cache_dir': None,  # Location to store cached binaries, defaults to tempdir
+    'compiled_binary_cache_size': 100,  # Maximum number of executables to cache (LRU order)
     'runtime': {},
+    # Map of executor: [list of extra allowed file regexes], used to configure
+    # the filesystem sandbox on a per-machine basis, without having to hack
+    # executor source.
+    'extra_fs': {},
+    # List of judge URLs to ping on problem data updates (the URLs are expected
+    # to host judges running with --api-host and --api-port)
+    'update_pings': [],
+    # Directory to use as temporary submission storage, system default
+    # (e.g. /tmp) if left blank. MANDATORY on Windows.
+    'tempdir': None,
+
+    # Windows-only settings
+    'inject32': None,  # Path to wbox's dmsec32.dll
+    'inject64': None,  # Path to wbox's dmsec64.dll
+    'inject_func': None,  # Name of injected DLL's entry point (e.g. InjectMain)
 }, dynamic=False)
 _root = os.path.dirname(__file__)
 
@@ -25,6 +51,7 @@ secure = no_cert_check = False
 cert_store = api_listen = None
 
 startup_warnings = []
+cli_command = []
 
 only_executors = set()
 exclude_executors = set()
@@ -34,18 +61,25 @@ def load_env(cli=False, testsuite=False):  # pragma: no cover
     global problem_dirs, only_executors, exclude_executors, log_file, server_host, \
         server_port, no_ansi, no_ansi_emu, env, startup_warnings, no_watchdog, \
         problem_regex, case_regex, api_listen, secure, no_cert_check, cert_store, \
-        problem_watches
-    parser = argparse.ArgumentParser(description='''
-        Spawns a judge for a submission server.
-    ''')
+        problem_watches, cli_command
+
+    if cli:
+        description = 'Starts a shell for interfacing with a local judge instance.'
+    else:
+        description = 'Spawns a judge for a submission server.'
+
+    parser = argparse.ArgumentParser(description=description)
     if not cli:
         parser.add_argument('server_host', help='host to connect for the server')
         parser.add_argument('judge_name', nargs='?', help='judge name (overrides configuration)')
         parser.add_argument('judge_key', nargs='?', help='judge key (overrides configuration)')
         parser.add_argument('-p', '--server-port', type=int, default=9999,
                             help='port to connect for the server')
-    parser.add_argument('-c', '--config', type=str, default=None, required=True,
-                        help='file to load judge configurations from')
+    else:
+        parser.add_argument('command', nargs='*', help='invoke CLI command without spawning shell')
+
+    parser.add_argument('-c', '--config', type=str, default='~/.dmojrc',
+                        help='file to load judge configurations from (default: ~/.dmojrc)')
 
     if not cli:
         parser.add_argument('-l', '--log-file',
@@ -87,6 +121,7 @@ def load_env(cli=False, testsuite=False):  # pragma: no cover
 
     server_host = getattr(args, 'server_host', None)
     server_port = getattr(args, 'server_port', None)
+    cli_command = getattr(args, 'command', [])
 
     no_ansi_emu = args.no_ansi_emu if os.name == 'nt' else True
     no_ansi = args.no_ansi
@@ -103,7 +138,7 @@ def load_env(cli=False, testsuite=False):  # pragma: no cover
     only_executors |= args.only_executors and set(args.only_executors.split(',')) or set()
     exclude_executors |= args.exclude_executors and set(args.exclude_executors.split(',')) or set()
 
-    model_file = args.config
+    model_file = os.path.expanduser(args.config)
 
     with open(model_file) as init_file:
         env.update(yaml.safe_load(init_file))
@@ -115,7 +150,11 @@ def load_env(cli=False, testsuite=False):  # pragma: no cover
             env['key'] = args.judge_key
 
         problem_dirs = env.problem_storage_root
-        if problem_dirs is not None:
+        if problem_dirs is None:
+            if not testsuite:
+                raise SystemExit('problem_storage_root not specified in "%s"; '
+                                 'no problems available to grade' % model_file)
+        else:
             # Populate cache and send warnings
             get_problem_roots(warnings=True)
 

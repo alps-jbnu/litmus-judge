@@ -9,7 +9,7 @@ from dmoj.utils.unicode import utf8bytes
 verdict = u"\u2717\u2713"
 
 
-def check(process_output, judge_output, point_value, feedback=False,
+def check(process_output, judge_output, point_value, feedback=True,
           match=lambda p, j: p.strip() == j.strip(), **kwargs):
     process_lines = list(filter(None, resplit(b'[\r\n]', utf8bytes(process_output))))
     judge_lines = list(filter(None, resplit(b'[\r\n]', utf8bytes(judge_output))))
@@ -33,3 +33,5 @@ def check(process_output, judge_output, point_value, feedback=False,
 
     return CheckerResult(count == len(judge_lines), point_value * (1.0 * count / len(judge_lines)),
                          ''.join(cases) if feedback else "")
+
+check.run_on_error = True

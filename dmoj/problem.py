@@ -12,7 +12,7 @@ from dmoj import checkers
 from dmoj.config import InvalidInitException, ConfigNode
 from dmoj.error import InternalError
 from dmoj.generator import GeneratorManager
-from dmoj.judgeenv import get_problem_root
+from dmoj.judgeenv import env, get_problem_root
 from dmoj.utils.module import load_module_from_file
 
 
@@ -41,6 +41,7 @@ class Problem(object):
                 'output_limit_length': 25165824,
                 'binary_data': False,
                 'short_circuit': True,
+                'symlinks': {},
             })
         except (IOError, KeyError, ParserError, ScannerError) as e:
             raise InvalidInitException(str(e))
@@ -127,76 +128,72 @@ class TestCase(object):
         self.has_binary_data = config.binary_data
         self._generated = None
 
-    def io_redirects(self):
-        redirects = self.config.io_redirects
-        if not redirects:
-            return None
-
-        # io_redirects:
-        #   DATA01.in:
-        #     fd: 0
-        #     mode: "r"
-        #   DATA01.out:
-        #     fd: 1
-        #     mode: "w"
-
-        filtered_data = {}
-
-        for redirect in redirects:
-            mapping = redirects[redirect]
-            if 'fd' not in mapping:
-                raise InvalidInitException("no fd specified for redirect '%s'" % redirect)
-            if 'mode' not in mapping:
-                raise InvalidInitException("no mode specified for redirect '%s'" % redirect)
-            if mapping.mode not in 'rw':
-                raise InvalidInitException("invalid mode for redirect '%s': valid options are 'r', 'w'" % redirect)
-            if isinstance(mapping.fd, six.string_types):
-                mapped = {'stdin': 0, 'stdout': 1, 'stderr': 2}.get(mapping.fd, None)
-                if mapped is None:
-                    raise InvalidInitException("unknown named fd for redirect '%s'" % redirect)
-                mapping.fd = mapped
-
-            filtered_data[redirect] = (mapping.mode, mapping.fd)
-
-        return filtered_data
-
     def _normalize(self, data):
-        # Perhaps the correct answer may be "no output", in which case it'll be None here if
-        # sourced from a generator
+        # Perhaps the correct answer may be "no output", in which case it'll be
+        # None here if sourced from a generator.
         data = data or b''
-        # Normalize all newline formats (\r\n, \r, \n) to \n, otherwise we have problems with people creating
-        # data on Macs (\r newline) when judged programs assume \n
-        if self.has_binary_data:
+
+        # Leave binary and empty data alone, don't want to muck up newlines
+        # there.
+        if self.has_binary_data or not data:
             return data
-        return data.replace(b'\r\n', b'\r').replace(b'\r', b'\n')
+
+        # Normalize all newline formats (\r\n, \r, \n) to \n, otherwise we have
+        # problems with people creating data on Macs (\r newline) when judged
+        # programs assume \n.
+        data = data.replace(b'\r\n', b'\r').replace(b'\r', b'\n')
+
+        # Some data might be missing a trailing newline, which makes the last
+        # line in the file not-a-line.
+        if not data.endswith(b'\n'):
+            data += b'\n'
+
+        return data
 
     def _run_generator(self, gen, args=None):
         flags = []
         args = args or []
 
         # resource limits on how to run the generator
-        time_limit = 20  # 20 seconds
-        memory_limit = 524288  # and 512mb of memory
-        use_sandbox = True
+        time_limit = env.generator_time_limit
+        memory_limit = env.generator_memory_limit
+        compiler_time_limit = env.compiler_time_limit
+        use_sandbox = env.generator_sandboxing
+        lang = None  # Default to C/C++
 
         base = get_problem_root(self.problem.id)
         if isinstance(gen, six.string_types):
-            filename = os.path.join(base, gen)
+            filenames = gen
+        elif isinstance(gen.unwrap(), list):
+            filenames = list(gen.unwrap())
         else:
-            filename = os.path.join(base, gen.source)
+            if isinstance(gen.source, six.string_types):
+                filenames = gen.source
+            elif isinstance(gen.source.unwrap(), list):
+                filenames = list(gen.source.unwrap())
+
             if gen.flags:
                 flags += gen.flags
             if not args and gen.args:
                 args += gen.args
 
+
             time_limit = gen.time_limit or time_limit
             memory_limit = gen.memory_limit or memory_limit
+            compiler_time_limit = gen.compiler_time_limit or compiler_time_limit
+            lang = gen.language
 
             # Optionally allow disabling the sandbox
             if gen.use_sandbox is not None:
                 use_sandbox = gen.use_sandbox
 
-        executor = self.problem.generator_manager.get_generator(filename, flags)
+        if not isinstance(filenames, list):
+            filenames = [filenames]
+
+        filenames = [os.path.join(base, name) for name in filenames]
+
+        executor = self.problem.generator_manager.get_generator(filenames, flags, lang=lang,
+                                                                compiler_time_limit=compiler_time_limit)
 
         # convert all args to str before launching; allows for smoother int passing
         args = map(str, args)

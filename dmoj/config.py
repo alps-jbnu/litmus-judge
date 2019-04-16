@@ -53,6 +53,9 @@ class ConfigNode(object):
             self.raw_config = raw_config or {}
         self.parent = parent
 
+    def unwrap(self):
+        return self.raw_config
+
     def update(self, dct):
         if hasattr(self.raw_config, 'update'):
             self.raw_config.update(dct)
@@ -112,6 +115,9 @@ class ConfigNode(object):
         except (KeyError, IndexError, TypeError):
             cfg = self.parent[item] if self.parent else None
         return cfg
+
+    def __len__(self):
+        return len(self.raw_config)
 
     def __setitem__(self, item, value):
         self.raw_config[item] = value

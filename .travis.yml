@@ -1,35 +1,40 @@
 sudo: required
-dist: trusty
+dist: xenial
 language: python
 python:
   - 2.7
-  - 3.4
   - 3.5
   - 3.6
+  - 3.7
+env:
+- DMOJ_USE_SECCOMP="yes"
+- DMOJ_USE_SECCOMP="no"
 addons:
   apt:
     sources:
+    - mono
     - sourceline: 'ppa:swi-prolog/stable'
-    - sourceline: 'deb http://cran.rstudio.com/bin/linux/ubuntu trusty/'
       key_url: 'http://keyserver.ubuntu.com/pks/lookup?op=get&fingerprint=on&search=0x51716619E084DAB9'
     - sourceline: 'deb [arch=amd64] https://storage.googleapis.com/download.dartlang.org/linux/debian stable main'
       key_url: 'https://dl-ssl.google.com/linux/linux_signing_key.pub'
     packages:
     - ghc
     - gnat
-    - php5-cli
+    - php7.0-cli
+    - mono-devel
+    - mono-vbnc
     - fp-compiler
     - coffeescript
     - binutils-multiarch
     - libc6-dev-i386
+    - libseccomp-dev
     - nasm
     - open-cobol
+    - ocaml
     - lua5.2
     - gfortran
-    - chicken-bin
     - tcl
     - swi-prolog
-    - r-base
     - dart/stable
     - scala
 cache:
@@ -42,7 +47,7 @@ before_install:
   # Install Swift
   - >
     mkdir swift &&
-    curl https://swift.org/builds/swift-2.2.1-release/ubuntu1404/swift-2.2.1-RELEASE/swift-2.2.1-RELEASE-ubuntu14.04.tar.gz |
+    curl https://swift.org/builds/swift-4.2.1-release/ubuntu1604/swift-4.2.1-RELEASE/swift-4.2.1-RELEASE-ubuntu16.04.tar.gz |
     tar xz -C swift --strip-components=1
   - export PATH=${PWD}/swift/usr/bin:"${PATH}"
   # Install PyPy
@@ -57,15 +62,17 @@ before_install:
     tar xj -C pypy3 --strip-components=1 &&
     ./pypy3/bin/pypy -mcompileall
   # Install Rust
-  - curl -sSf https://static.rust-lang.org/rustup.sh | sudo sh
+  - curl https://sh.rustup.rs -sSf | sh -s -- -y
+  # Add `cargo` to PATH
+  - export PATH=${HOME}/.cargo/bin:"${PATH}"
   # Install latest Scala
-  - wget http://downloads.lightbend.com/scala/2.11.8/scala-2.11.8.deb
-  - sudo dpkg -i scala-2.11.8.deb
+  - wget http://downloads.lightbend.com/scala/2.12.4/scala-2.12.4.deb
+  - sudo dpkg -i scala-2.12.4.deb
   # Install D
   - wget http://downloads.dlang.org/releases/2.x/2.071.1/dmd_2.071.1-0_amd64.deb
   - sudo dpkg -i dmd_2.071.1-0_amd64.deb
   # Install Kotlin
-  # - > 
+  # - >
   #  wget -O kotlinc.zip https://github.com/JetBrains/kotlin/releases/download/v1.1.60/kotlin-compiler-1.1.60.zip &&
   #  unzip kotlinc.zip &&
   #  export PATH=${PWD}/kotlinc/bin:"${PATH}"

@@ -15,7 +15,7 @@ import six
 from six.moves import range
 
 from dmoj.cptbox._cptbox import *
-from dmoj.cptbox.handlers import DISALLOW, _CALLBACK
+from dmoj.cptbox.handlers import ALLOW, DISALLOW, _CALLBACK
 from dmoj.cptbox.syscalls import translator, SYSCALL_COUNT, by_id
 from dmoj.error import InternalError
 from dmoj.utils.communicate import safe_communicate as _safe_communicate
@@ -40,7 +40,8 @@ def _find_exe(path):
 def file_info(path, split=re.compile(r'[\s,]').split):
     try:
         return split(utf8text(subprocess.check_output(['file', '-b', '-L', path])))
-    except subprocess.CalledProcessError:
+    except (OSError, subprocess.CalledProcessError):
+        log.exception('call to file(1) failed -- does the utility exist?')
         return []
 
 
@@ -108,9 +109,6 @@ _arch_map = {
 class AdvancedDebugger(Debugger):
     # Implements additional debugging functionality for convenience.
 
-    def get_syscall_id(self, syscall):
-        return translator[syscall][self._syscall_index]
-
     def readstr(self, address, max_size=4096):
         if self.address_bits == 32:
             address &= 0xFFFFFFFF
@@ -144,7 +142,7 @@ class SecurePopen(six.with_metaclass(SecurePopenMeta, Process)):
     debugger_type = AdvancedDebugger
 
     def __init__(self, debugger, _, args, executable=None, security=None, time=0, memory=0, stdin=PIPE, stdout=PIPE,
-                 stderr=None, env=None, nproc=0, address_grace=4096, personality=0, cwd='',
+                 stderr=None, env=None, nproc=0, address_grace=4096, data_grace=0, personality=0, cwd='',
                  fds=None, wall_time=None):
         self._debugger_type = debugger
         self._syscall_index = index = _SYSCALL_INDICIES[debugger]
@@ -158,8 +156,8 @@ class SecurePopen(six.with_metaclass(SecurePopenMeta, Process)):
         self._cpu_time = time + 5 if time else 0
         self._memory = memory
         self._child_personality = personality
-        self._child_memory = memory * 1024
-        self._child_address = self._child_memory + address_grace * 1024 if memory else 0
+        self._child_memory = memory * 1024 + data_grace * 1024
+        self._child_address = memory * 1024 + address_grace * 1024 if memory else 0
         self._nproc = nproc
         self._tle = False
         self._fds = fds
@@ -171,20 +169,23 @@ class SecurePopen(six.with_metaclass(SecurePopenMeta, Process)):
 
         self._security = security
         self._callbacks = [None] * MAX_SYSCALL_NUMBER
+        self._syscall_whitelist = [False] * MAX_SYSCALL_NUMBER
         if security is None:
             self._trace_syscalls = False
         else:
             for i in range(SYSCALL_COUNT):
                 handler = security.get(i, DISALLOW)
-                call = translator[i][index]
-                if call is None:
-                    continue
-                if not isinstance(handler, int):
-                    if not callable(handler):
-                        raise ValueError('Handler not callable: ' + handler)
-                    self._callbacks[call] = handler
-                    handler = _CALLBACK
-                self._handler(call, handler)
+                for call in translator[i][index]:
+                    if call is None:
+                        continue
+                    if isinstance(handler, int):
+                        self._syscall_whitelist[call] = handler == ALLOW
+                    else:
+                        if not callable(handler):
+                            raise ValueError('Handler not callable: ' + handler)
+                        self._callbacks[call] = handler
+                        handler = _CALLBACK
+                    self._handler(call, handler)
 
         self._started = threading.Event()
         self._died = threading.Event()
@@ -197,10 +198,13 @@ class SecurePopen(six.with_metaclass(SecurePopenMeta, Process)):
 
     def wait(self):
         self._died.wait()
-        if self.returncode == 204 and not self.was_initialized:
-            raise RuntimeError('failed to ptrace child, check Yama config '
-                               '(https://www.kernel.org/doc/Documentation/security/Yama.txt, should be '
-                               'at most 1); if running in Docker, must run container with `--privileged`')
+        if not self.was_initialized:
+            if self.returncode == 203:
+                raise RuntimeError('failed to set up seccomp policy')
+            elif self.returncode == 204:
+                raise RuntimeError('failed to ptrace child, check Yama config '
+                                   '(https://www.kernel.org/doc/Documentation/security/Yama.txt, should be '
+                                   'at most 1); if running in Docker, must run container with `--privileged`')
         return self.returncode
 
     def poll(self):
@@ -253,7 +257,7 @@ class SecurePopen(six.with_metaclass(SecurePopenMeta, Process)):
             callname = 'unknown'
             index = self._syscall_index
             for id, call in enumerate(translator):
-                if call[index] == syscall:
+                if syscall in call[index]:
                     callname = by_id[id]
                     break
 

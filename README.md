@@ -1,4 +1,4 @@
-DMOJ Judge [![Linux Build Status](https://img.shields.io/travis/DMOJ/judge.svg?logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxODguMSAxOTUuNSI%2BPHBhdGggZmlsbD0iI2ZmZiIgZD0iTTM2LjQgOTcuOGMwIDEwLTggMTguMi0xOC4yIDE4LjJDOC4yIDExNiAwIDEwOCAwIDk3LjhjMC0xMCA4LjItMTguMiAxOC4yLTE4LjJzMTguMiA4IDE4LjIgMTguMnpNMTQwIDE4Ni40YzUgOC43IDE2LjMgMTEuNyAyNSA2LjcgOC43LTUgMTEuNy0xNi4yIDYuNy0yNS01LTguNi0xNi4yLTExLjYtMjUtNi42LTguNiA1LTExLjYgMTYuMi02LjYgMjV6bTMxLjctMTU5YzUtOC43IDItMTkuOC02LjctMjUtOC43LTUtMjAtMi0yNSA2LjgtNSA4LjctMiAyMCA2LjggMjVzMTkuOCAyIDI1LTYuOHpNMTEwIDQ1LjhjMjcuMiAwIDQ5LjQgMjAuOCA1MS44IDQ3LjRsMjYuMy0uNGMtMS0xOS43LTkuNy0zNy41LTIzLTUwLjYtNyAyLjctMTUgMi40LTIyLTEuNy03LTQtMTEuMy0xMS0xMi40LTE4LjMtNi42LTEuNy0xMy41LTIuNy0yMC42LTIuNy0xMi41IDAtMjQuMyAzLTM0LjcgOEw4OCA1MC43YzYuNy0zIDE0LTUgMjItNXptLTUyIDUyYzAtMTcuNiA4LjgtMzMgMjItNDIuNUw2Ni42IDMyLjdDNTEgNDMuMiAzOS4yIDU5LjIgMzQuNCA3Ny43YzUuNyA0LjggOS41IDEyIDkuNSAyMHMtNCAxNS40LTkuNyAyMGM0LjggMTguOCAxNi41IDM0LjggMzIuMiA0NS4zTDgwIDE0MC4zQzY2LjcgMTMxIDU4IDExNS41IDU4IDk4em01MiA1MmMtNy44IDAtMTUuMi0xLjgtMjItNWwtMTIuNiAyMy40YzEwLjMgNS4yIDIyIDggMzQuNiA4IDcgMCAxNC0xIDIwLjYtMi42IDEtNy41IDUuNS0xNC4zIDEyLjUtMTguMyA3LTQuMiAxNS00LjUgMjItMS44IDEzLjMtMTMgMjItMzEgMjMtNTAuNmwtMjYuMi0uNUMxNTkuNCAxMjkgMTM3LjIgMTUwIDExMCAxNTB6Ii8%2BPC9zdmc%2B)](https://travis-ci.org/DMOJ/judge) [![Windows Build Status](https://ci.appveyor.com/api/projects/status/wv4e1eujb6wtcbps?svg=true)](https://ci.appveyor.com/project/quantum5/judge) [![FreeBSD Build Status](https://img.shields.io/jenkins/s/https/ci.dmoj.ca/job/dmoj-judge-freebsd.svg?logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB3aWR0aD0iMTQiIGhlaWdodD0iMTQiIHZpZXdCb3g9IjAgMCAyNTYgMjUyIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHByZXNlcnZlQXNwZWN0UmF0aW89InhNaWRZTWlkIj48ZyBmaWxsPSJ3aGl0ZSI%2BPHBhdGggZD0iTTI1Mi43MjMgNS4xMWMxMy41MDggMTMuNS0yMy45MzkgNzIuODQ4LTMwLjI3IDc5LjE4Mi02LjMzIDYuMzIxLTIyLjQwOS41MDUtMzUuOTEtMTMtMTMuNTA4LTEzLjUtMTkuMzI3LTI5LjU4My0xMi45OTYtMzUuOTE0IDYuMzI3LTYuMzMzIDY1LjY3MS00My43NzcgNzkuMTc2LTMwLjI2OU02My4zMDUgMTkuMzk0Yy0yMC42MjItMTEuNy00OS45NjYtMjQuNzE2LTU5LjMtMTUuMzgtOS40NTggOS40NTQgNC4wMzQgMzkuNDU4IDE1Ljg1OCA2MC4xMTdhMTI2LjgxMiAxMjYuODEyIDAgMCAxIDQzLjQ0Mi00NC43MzciLz48cGF0aCBkPSJNMjMyLjEyMyA3OS42MzZjMS44OTkgNi40NCAxLjU1OCAxMS43Ni0xLjUyMiAxNC44MzQtNy4xOTMgNy4xOTYtMjYuNjI0LS40NjQtNDQuMTQtMTcuMTM0YTg5LjM4MyA4OS4zODMgMCAwIDEtMy42MjctMy40MjhjLTYuMzM0LTYuMzM2LTExLjI2Mi0xMy4wOC0xNC40MTQtMTkuMjkxLTYuMTM1LTExLjAwNi03LjY3LTIwLjcyNi0zLjAzMy0yNS4zNjQgMi41MjctMi41MjQgNi41Ny0zLjIxMiAxMS41MDItMi4zMjUgMy4yMTYtMi4wMzQgNy4wMTMtNC4zIDExLjE3Ni02LjYyMS0xNi45MjktOC44My0zNi4xNzYtMTMuODE3LTU2LjU5My0xMy44MTdDNjMuNzUzIDYuNDkgOC44NTQgNjEuMzggOC44NTQgMTI5LjEwNWMwIDY3LjcxMyA1NC45IDEyMi42MSAxMjIuNjE4IDEyMi42MSA2Ny43MiAwIDEyMi42MTYtNTQuODk3IDEyMi42MTYtMTIyLjYxIDAtMjEuODctNS43NC00Mi4zNzctMTUuNzY3LTYwLjE1Ni0yLjE2NyAzLjk1NS00LjI3NCA3LjU3OC02LjE5OCAxMC42ODciLz48L2c%2BPC9zdmc%2B)](https://ci.dmoj.ca/job/dmoj-judge-freebsd/lastBuild/consoleFull) [![Coverage](https://img.shields.io/codecov/c/github/DMOJ/judge.svg)](https://codecov.io/gh/DMOJ/judge) [![Documentation Status](https://readthedocs.org/projects/dmoj/badge/?version=latest)](https://docs.dmoj.ca) [![Slack](https://slack.dmoj.ca/badge.svg)](https://slack.dmoj.ca)
+DMOJ Judge [![Linux Build Status](https://img.shields.io/travis/DMOJ/judge.svg?logo=linux)](https://travis-ci.org/DMOJ/judge) [![Windows Build Status](https://img.shields.io/appveyor/ci/quantum5/judge.svg?logo=windows)](https://ci.appveyor.com/project/quantum5/judge) [![FreeBSD Build Status](https://img.shields.io/jenkins/s/https/ci.dmoj.ca/job/dmoj-judge-freebsd.svg?logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB3aWR0aD0iMTQiIGhlaWdodD0iMTQiIHZpZXdCb3g9IjAgMCAyNTYgMjUyIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHByZXNlcnZlQXNwZWN0UmF0aW89InhNaWRZTWlkIj48ZyBmaWxsPSJ3aGl0ZSI%2BPHBhdGggZD0iTTI1Mi43MjMgNS4xMWMxMy41MDggMTMuNS0yMy45MzkgNzIuODQ4LTMwLjI3IDc5LjE4Mi02LjMzIDYuMzIxLTIyLjQwOS41MDUtMzUuOTEtMTMtMTMuNTA4LTEzLjUtMTkuMzI3LTI5LjU4My0xMi45OTYtMzUuOTE0IDYuMzI3LTYuMzMzIDY1LjY3MS00My43NzcgNzkuMTc2LTMwLjI2OU02My4zMDUgMTkuMzk0Yy0yMC42MjItMTEuNy00OS45NjYtMjQuNzE2LTU5LjMtMTUuMzgtOS40NTggOS40NTQgNC4wMzQgMzkuNDU4IDE1Ljg1OCA2MC4xMTdhMTI2LjgxMiAxMjYuODEyIDAgMCAxIDQzLjQ0Mi00NC43MzciLz48cGF0aCBkPSJNMjMyLjEyMyA3OS42MzZjMS44OTkgNi40NCAxLjU1OCAxMS43Ni0xLjUyMiAxNC44MzQtNy4xOTMgNy4xOTYtMjYuNjI0LS40NjQtNDQuMTQtMTcuMTM0YTg5LjM4MyA4OS4zODMgMCAwIDEtMy42MjctMy40MjhjLTYuMzM0LTYuMzM2LTExLjI2Mi0xMy4wOC0xNC40MTQtMTkuMjkxLTYuMTM1LTExLjAwNi03LjY3LTIwLjcyNi0zLjAzMy0yNS4zNjQgMi41MjctMi41MjQgNi41Ny0zLjIxMiAxMS41MDItMi4zMjUgMy4yMTYtMi4wMzQgNy4wMTMtNC4zIDExLjE3Ni02LjYyMS0xNi45MjktOC44My0zNi4xNzYtMTMuODE3LTU2LjU5My0xMy44MTdDNjMuNzUzIDYuNDkgOC44NTQgNjEuMzggOC44NTQgMTI5LjEwNWMwIDY3LjcxMyA1NC45IDEyMi42MSAxMjIuNjE4IDEyMi42MSA2Ny43MiAwIDEyMi42MTYtNTQuODk3IDEyMi42MTYtMTIyLjYxIDAtMjEuODctNS43NC00Mi4zNzctMTUuNzY3LTYwLjE1Ni0yLjE2NyAzLjk1NS00LjI3NCA3LjU3OC02LjE5OCAxMC42ODciLz48L2c%2BPC9zdmc%2B)](https://ci.dmoj.ca/job/dmoj-judge-freebsd/lastBuild/consoleFull) [![Coverage](https://img.shields.io/codecov/c/github/DMOJ/judge.svg)](https://codecov.io/gh/DMOJ/judge) [![Documentation Status](https://readthedocs.org/projects/dmoj/badge/?version=latest)](https://docs.dmoj.ca) [![Slack](https://slack.dmoj.ca/badge.svg)](https://slack.dmoj.ca)
 =====
 
 Python [AGPLv3](https://github.com/DMOJ/judge/blob/master/LICENSE) contest judge backend for the [DMOJ site](http://github.com/DMOJ/site) interface. See it in action at [dmoj.ca](https://dmoj.ca/)!
@@ -80,7 +80,7 @@ The judge can also grade in the languages listed below. These languages are less
 * Tcl
 * Turing
 * V8 JavaScript
-* Brain****
+* Brain\*\*\*\*
 
 ## Installation
 Installing the DMOJ judge creates two executables in your Python's script directory: `dmoj` and `dmoj-cli`.
@@ -110,29 +110,49 @@ $ git submodule update --init --recursive
 $ pip install -e .
 ```
 
+Several environment variables can be specified to control the compilation of the sandbox:
+
+* `DMOJ_USE_SECCOMP`; set it to `no` if you're building on a pre-Linux 3.5 kernel to disable `seccomp` filtering in favour of pure `ptrace` (slower).
+   This flag has no effect when building outside of Linux.
+* `DMOJ_TARGET_ARCH`; use it to override the default architecture specified for compiling the sandbox (via `-march`).
+   Usually this is `native`, but will not be specified on ARM unless `DMOJ_TARGET_ARCH` is set (a generic, slow build will be compiled instead).
+
 ## Usage
 ### Running a Judge Server
 ```
 $ dmoj --help
-usage: dmoj [-h] [-p SERVER_PORT] -c CONFIG [-l LOG_FILE]
+usage: dmoj [-h] [-p SERVER_PORT] -c CONFIG [-l LOG_FILE] [--no-watchdog]
+            [-a API_PORT] [-A API_HOST] [-s] [-k] [-T TRUSTED_CERTIFICATES]
             [-e ONLY_EXECUTORS | -x EXCLUDE_EXECUTORS] [--no-ansi]
             server_host [judge_name] [judge_key]
 
 Spawns a judge for a submission server.
 
 positional arguments:
-  server_host           host to listen for the server
+  server_host           host to connect for the server
   judge_name            judge name (overrides configuration)
   judge_key             judge key (overrides configuration)
 
 optional arguments:
   -h, --help            show this help message and exit
   -p SERVER_PORT, --server-port SERVER_PORT
-                        port to listen for the server
+                        port to connect for the server
   -c CONFIG, --config CONFIG
                         file to load judge configurations from
   -l LOG_FILE, --log-file LOG_FILE
                         log file to use
+  --no-watchdog         disable use of watchdog on problem directories
+  -a API_PORT, --api-port API_PORT
+                        port to listen for the judge API (do not expose to
+                        public, security is left as an exercise for the
+                        reverse proxy)
+  -A API_HOST, --api-host API_HOST
+                        IPv4 address to listen for judge API
+  -s, --secure          connect to server via TLS
+  -k, --no-certificate-check
+                        do not check TLS certificate
+  -T TRUSTED_CERTIFICATES, --trusted-certificates TRUSTED_CERTIFICATES
+                        use trusted certificate file instead of system
   -e ONLY_EXECUTORS, --only-executors ONLY_EXECUTORS
                         only listed executors will be loaded (comma-separated)
   -x EXCLUDE_EXECUTORS, --exclude-executors EXCLUDE_EXECUTORS
@@ -160,7 +180,6 @@ optional arguments:
                         prevent listed executors from loading (comma-
                         separated)
   --no-ansi             disable ANSI output
-  --no-ansi-emu         disable ANSI emulation on Windows
 ```
 
 ## Documentation
